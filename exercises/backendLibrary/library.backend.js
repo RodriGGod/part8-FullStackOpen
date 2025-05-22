@@ -100,10 +100,15 @@ let books = [
 
 const typeDefs = `
     type Query {
+        me: User
         bookCount: Int!
         authorCount: Int!
         allBooks(author: String, genre: String): [Book!]!
         allAuthors: [Author!]!
+    }
+    type User {
+        username: String!
+        favoriteGenre: String!
     }
     type Mutation {
         addBook(
@@ -132,6 +137,12 @@ const typeDefs = `
     }
 `
 
+const user = {
+    username: 'admin',
+    favoriteGenre: 'refactoring'
+}
+
+
 const resolvers = {
     Query: {
         bookCount: () => books.length,
@@ -158,6 +169,9 @@ const resolvers = {
                     bookCount
                 }
             })
+        },
+        me: (root, args, context) => {
+            return context.currentUser
         }
     },
     Mutation: {
@@ -190,6 +204,9 @@ const server = new ApolloServer({
 
 startStandaloneServer(server, {
     listen: { port: 4000 },
+    context: async () => {
+        return { currentUser: user }
+    }
 }).then(({ url }) => {
     console.log(`Server ready at ${url}`)
 })
