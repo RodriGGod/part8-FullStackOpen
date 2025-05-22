@@ -104,6 +104,15 @@ const typeDefs = `
         allBooks: [Book!]!
         allAuthors: [Author!]!
     }
+    type Mutation {
+        addBook(
+            title: String!
+            author: String!
+            published: Int!
+            genres: [String!]!
+        ): Book
+    }
+
 
     type Book {
         title: String!
@@ -132,6 +141,19 @@ const resolvers = {
                     bookCount
                 }
             })
+        }
+    },
+    Mutation: {
+        addBook: (root, args) => {
+            const newBook = { ...args, id: crypto.randomUUID() }
+            books.push(newBook)
+
+            // Si el autor no existe, lo añadimos con born: null
+            if (!authors.find(a => a.name === args.author)) {
+                authors.push({ name: args.author, id: crypto.randomUUID(), born: null })
+            }
+
+            return newBook
         }
     }
 }
