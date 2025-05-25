@@ -1,10 +1,8 @@
-// index.js
-import { ApolloServer } from '@apollo/server'
-import { startStandaloneServer } from '@apollo/server/standalone'
-import { v4 as uuid } from 'uuid'
-import { GraphQLError } from 'graphql'
+const { ApolloServer } = require('@apollo/server')
+const { startStandaloneServer } = require('@apollo/server/standalone')
+const { v1: uuid } = require('uuid')
+const { GraphQLError } = require('graphql')
 
-// Datos falsos (como si fuera una base de datos en memoria)
 let persons = [
   {
     name: "Arto Hellas",
@@ -28,32 +26,33 @@ let persons = [
   },
 ]
 
-
-
-// Esquema GraphQL
-const typeDefs = `#graphql
+const typeDefs = `
   type Address {
     street: String!
-    city: String!
+    city: String! 
+  }
+
+  enum YesNo {
+    YES
+    NO
+  }
+  
+  type Query {
+    personCount: Int!
+    allPersons(phone: YesNo): [Person!]!
+    findPerson(name: String!): Person
   }
 
   type Person {
     name: String!
-    street: String!
-    city: String!
     phone: String
-    address: Address
+    address: Address!
     id: ID!
-  }
-
-  enum YesNo {
-  YES
-  NO
   }
 
   type Query {
     personCount: Int!
-    allPersons(phone: YesNo): [Person!]!
+    allPersons: [Person!]!
     findPerson(name: String!): Person
   }
 
@@ -64,6 +63,7 @@ const typeDefs = `#graphql
       street: String!
       city: String!
     ): Person
+
     editNumber(
       name: String!
       phone: String!
@@ -71,7 +71,6 @@ const typeDefs = `#graphql
   }
 `
 
-// Resolvers = lógica que ejecuta las consultas
 const resolvers = {
   Query: {
     personCount: () => persons.length,
@@ -83,18 +82,16 @@ const resolvers = {
         args.phone === 'YES' ? person.phone : !person.phone
       return persons.filter(byPhone)
     },
-    findPerson: (root, args) => {
-      const normalizedName = args.name.trim().toLowerCase()
-      return persons.find(p => p.name.trim().toLowerCase() === normalizedName)
-    }
-
+    findPerson: (root, args) =>
+      persons.find(p => p.name === args.name)
   },
   Person: {
-    name: (root) => root.name,
-    phone: (root) => root.phone,
-    street: (root) => root.street,
-    city: (root) => root.city,
-    id: (root) => root.id
+    address: ({ street, city }) => {
+      return {
+        street,
+        city,
+      }
+    },
   },
   Mutation: {
     addPerson: (root, args) => {
@@ -106,33 +103,31 @@ const resolvers = {
           }
         })
       }
-
       const person = { ...args, id: uuid() }
       persons = persons.concat(person)
       return person
     },
     editNumber: (root, args) => {
-    const person = persons.find(p => p.name === args.name)
-    if (!person) {
-      return null
-    }
-
-    const updatedPerson = { ...person, phone: args.phone }
-    persons = persons.map(p => p.name === args.name ? updatedPerson : p)
-    return updatedPerson
-  } 
+      const person = persons.find(p => p.name === args.name)
+      if (!person) {
+        return null
+      }
+  
+      const updatedPerson = { ...person, phone: args.phone }
+      persons = persons.map(p => p.name === args.name ? updatedPerson : p)
+      return updatedPerson
+    } 
   }
 }
 
-// Crear el servidor Apollo
 const server = new ApolloServer({
   typeDefs,
-  resolvers
+  resolvers,
 })
 
-// Iniciar el servidor
-const { url } = await startStandaloneServer(server, {
-  listen: { port: 4000 }
-})
 
-console.log(`🚀 Servidor listo en ${url}`)
+startStandaloneServer(server, {
+  listen: { port: 4000 },
+}).then(({ url }) => {
+  console.log(`Server ready at ${url}`)
+})
