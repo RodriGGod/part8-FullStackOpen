@@ -7,6 +7,21 @@
   "type": "commonjs",
   "main": "library.backend.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "nodemon library.backend.js"
+  },
+  "dependencies": {
+    "@apollo/client": "^3.13.8",
+    "@apollo/server": "^4.12.1",
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "graphql": "^16.11.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.15.1"
+  },
+  "keywords": [],
+  "devDependencies": {
+    "nodemon": "^3.1.10"
   }
 }
