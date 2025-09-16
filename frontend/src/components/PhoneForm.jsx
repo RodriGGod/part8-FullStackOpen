@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useMutation } from '@apollo/client'
 
 import { EDIT_NUMBER } from '../queries'
@@ -6,9 +6,9 @@ import { EDIT_NUMBER } from '../queries'
 const PhoneForm = () => {
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
+  const [changeNumber, result] = useMutation(EDIT_NUMBER)
 
-
-  const [ changeNumber ] = useMutation(EDIT_NUMBER)
+  
 
   const submit = (event) => {
     event.preventDefault()
