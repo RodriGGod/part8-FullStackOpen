@@ -1,6 +1,11 @@
 const { ApolloServer } = require('@apollo/server')
 const { startStandaloneServer } = require('@apollo/server/standalone')
-const e = require('cors')
+const book = require('./models/book')
+const author = require('./models/author')
+const user = require('./models/user')
+const mongoose = require('mongoose')
+mongoose.set('strictQuery', false)
+
 
 let authors = [
     {
@@ -127,7 +132,7 @@ const typeDefs = `
     type Book {
         title: String!
         published: Int!
-        author: String!
+        author: Author!  
         genres: [String!]!
     }
     type Author {
