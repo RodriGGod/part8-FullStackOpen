@@ -1,7 +1,9 @@
 const { ApolloServer } = require('@apollo/server')
 const { startStandaloneServer } = require('@apollo/server/standalone')
-const Book = require('./models/book')
+const { GraphQLError } = require('graphql')
+const { throwBadInput } = require('./utils/errors') // si usas el helper
 const Author = require('./models/author')
+const Book   = require('./models/book')
 const mongoose = require('mongoose')
 mongoose.set('strictQuery', false)
 require('dotenv').config()
@@ -177,21 +179,24 @@ const resolvers = {
 
     // Resolver de campo para calcular bookCount por autor
     Author: {
-        bookCount: async (root) => {
-            // root._id disponible porque viene de Mongo
-            return Book.countDocuments({ author: root._id })
-        }
+        bookCount: async (root) => Book.countDocuments({ author: root._id })
     },
 
     Mutation: {
-        // Crea/encuentra autor por nombre, guarda libro y devuelve con author populado
         addBook: async (root, args) => {
+            // 1) autor: crear o recuperar
             let author = await Author.findOne({ name: args.author })
             if (!author) {
                 author = new Author({ name: args.author })
-                await author.save()
+                try {
+                    await author.save()
+                } catch (error) {
+                    // aquí saltan minlength/unique del autor
+                    throwBadInput('Creating author failed', { name: args.author }, error)
+                }
             }
 
+            // 2) libro
             const book = new Book({
                 title: args.title,
                 published: args.published,
@@ -199,16 +204,24 @@ const resolvers = {
                 author: author._id,
             })
 
-            const saved = await book.save()
-            return saved.populate('author')
+            try {
+                const saved = await book.save() // aquí saltan minlength/unique del título, géneros vacíos, etc.
+                return saved.populate('author')
+            } catch (error) {
+                throwBadInput('Creating book failed', { title: args.title }, error)
+            }
         },
 
-        // Actualiza born por nombre (si no existe → null)
         editAuthor: async (root, { name, setBornTo }) => {
             const author = await Author.findOne({ name })
             if (!author) return null
+
             author.born = setBornTo
-            return author.save()
+            try {
+                return await author.save() // podría fallar si cambias también 'name' en otra versión
+            } catch (error) {
+                throwBadInput('Updating author failed', { name }, error)
+            }
         }
     }
 }
@@ -221,8 +234,8 @@ const server = new ApolloServer({
 const User = { username: 'admin', favoriteGenre: 'refactoring' }
 
 startStandaloneServer(server, {
-  listen: { port: 4000 },
-  context: async () => ({ currentUser: User })
+    listen: { port: 4000 },
+    context: async () => ({ currentUser: User })
 }).then(({ url }) => {
-  console.log(`Server ready at ${url}`)
+    console.log(`Server ready at ${url}`)
 })
