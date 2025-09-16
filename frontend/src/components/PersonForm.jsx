@@ -4,7 +4,7 @@ import { CREATE_PERSON, ALL_PERSONS } from '../queries'
 
 
 
-const PersonForm = ({setError}) => {
+const PersonForm = ({ setError }) => {
     const [name, setName] = useState('')
     const [phone, setPhone] = useState('')
     const [street, setStreet] = useState('')
@@ -16,18 +16,24 @@ const PersonForm = ({setError}) => {
         onError: (error) => {
             const messages = error.graphQLErrors.map(e => e.message).join('\n')
             setError(messages)
-        }
+        },
+        update: (cache, response) => {
+            cache.updateQuery({ query: ALL_PERSONS }, ({ allPersons }) => {
+                return {
+                    allPersons: allPersons.concat(response.data.addPerson),
+                }
+            })
+        },
     })
 
-    const submit = (event) => {
+    const submit = async (event) => {
         event.preventDefault()
-
-        createPerson({ variables: { name, phone, street, city } })
-
-        setName('')
-        setPhone('')
-        setStreet('')
-        setCity('')
+        createPerson({
+            variables: {
+                name, street, city,
+                phone: phone.length > 0 ? phone : undefined
+            }
+        })
     }
 
     return (
