@@ -8,10 +8,12 @@ const User = require('./models/user')
 const mongoose = require('mongoose')
 const jwt = require('jsonwebtoken')
 mongoose.set('strictQuery', false)
+
 require('dotenv').config()
 
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/library'
+const MONGODB_URI = process.env.MONGODB_URI
+
 mongoose.connect(MONGODB_URI)
     .then(() => console.log('connected to MongoDB'))
     .catch(err => console.error('Mongo error:', err))
@@ -158,13 +160,15 @@ const typeDefs = `
     published: Int!
     author: Author!
     genres: [String!]!
-  }
+    id: ID!        
+    }
 
-  type Author {
+    type Author {
     name: String!
     born: Int
     bookCount: Int
-  }
+    id: ID!        
+    }
 `
 
 
