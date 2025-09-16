@@ -1,11 +1,16 @@
 const { ApolloServer } = require('@apollo/server')
 const { startStandaloneServer } = require('@apollo/server/standalone')
-const book = require('./models/book')
-const author = require('./models/author')
-const user = require('./models/user')
+const Book = require('./models/book')
+const Author = require('./models/author')
 const mongoose = require('mongoose')
 mongoose.set('strictQuery', false)
+require('dotenv').config()
 
+
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/library'
+mongoose.connect(MONGODB_URI)
+    .then(() => console.log('connected to MongoDB'))
+    .catch(err => console.error('Mongo error:', err))
 
 let authors = [
     {
@@ -150,55 +155,61 @@ const user = {
 
 const resolvers = {
     Query: {
-        bookCount: () => books.length,
-        authorCount: () => authors.length,
-        allBooks: (root, args) => {
-            let filteredBooks = books
+        bookCount: async () => Book.collection.countDocuments(),
+        authorCount: async () => Author.collection.countDocuments(),
 
-            if (args.author) {
-                filteredBooks = filteredBooks.filter(book => book.author === args.author)
-            }
-
-            if (args.genre) {
-                filteredBooks = filteredBooks.filter(book => book.genres.includes(args.genre))
-            }
-
-            return filteredBooks
+        // allBooks con filtro por genre (el truco: usar $in)
+        allBooks: async (root, args) => {
+            const q = {}
+            if (args.genre) q.genres = { $in: [args.genre] }
+            // el filtro por author NO es necesario ahora (se pide que no)
+            return Book.find(q).populate('author')
         },
-        allAuthors: () => {
-            return authors.map(author => {
-                const bookCount = books.filter(book => book.author === author.name).length
-                return {
-                    name: author.name,
-                    born: author.born,
-                    bookCount
-                }
-            })
+
+        // Devolver todos los autores; bookCount se calcula abajo en el field resolver
+        allAuthors: async () => {
+            return Author.find({})
         },
-        me: (root, args, context) => {
-            return context.currentUser
+
+        // Puedes dejar tu "me" tal cual con el usuario fake en context
+        me: (root, args, context) => context.currentUser
+    },
+
+    // Resolver de campo para calcular bookCount por autor
+    Author: {
+        bookCount: async (root) => {
+            // root._id disponible porque viene de Mongo
+            return Book.countDocuments({ author: root._id })
         }
     },
-    Mutation: {
-        addBook: (root, args) => {
-            const newBook = { ...args, id: crypto.randomUUID() }
-            books.push(newBook)
 
-            // Si el autor no existe, lo añadimos con born: null
-            if (!authors.find(a => a.name === args.author)) {
-                authors.push({ name: args.author, id: crypto.randomUUID(), born: null })
+    Mutation: {
+        // Crea/encuentra autor por nombre, guarda libro y devuelve con author populado
+        addBook: async (root, args) => {
+            let author = await Author.findOne({ name: args.author })
+            if (!author) {
+                author = new Author({ name: args.author })
+                await author.save()
             }
 
-            return newBook
+            const book = new Book({
+                title: args.title,
+                published: args.published,
+                genres: args.genres,
+                author: author._id,
+            })
+
+            const saved = await book.save()
+            return saved.populate('author')
         },
-        editAuthor: (root, args) => {
-            const author = authors.find(a => a.name === args.name)
+
+        // Actualiza born por nombre (si no existe → null)
+        editAuthor: async (root, { name, setBornTo }) => {
+            const author = await Author.findOne({ name })
             if (!author) return null
-
-            author.born = args.setBornTo
-            return author
+            author.born = setBornTo
+            return author.save()
         }
-
     }
 }
 
@@ -207,11 +218,11 @@ const server = new ApolloServer({
     resolvers,
 })
 
+const User = { username: 'admin', favoriteGenre: 'refactoring' }
+
 startStandaloneServer(server, {
-    listen: { port: 4000 },
-    context: async () => {
-        return { currentUser: user }
-    }
+  listen: { port: 4000 },
+  context: async () => ({ currentUser: User })
 }).then(({ url }) => {
-    console.log(`Server ready at ${url}`)
+  console.log(`Server ready at ${url}`)
 })
