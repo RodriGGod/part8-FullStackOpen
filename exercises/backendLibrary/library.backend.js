@@ -3,8 +3,10 @@ const { startStandaloneServer } = require('@apollo/server/standalone')
 const { GraphQLError } = require('graphql')
 const { throwBadInput } = require('./utils/errors') // si usas el helper
 const Author = require('./models/author')
-const Book   = require('./models/book')
+const Book = require('./models/book')
+const User = require('./models/user')
 const mongoose = require('mongoose')
+const jwt = require('jsonwebtoken')
 mongoose.set('strictQuery', false)
 require('dotenv').config()
 
@@ -111,48 +113,62 @@ let books = [
 */
 
 const typeDefs = `
-    type Query {
-        me: User
-        bookCount: Int!
-        authorCount: Int!
-        allBooks(author: String, genre: String): [Book!]!
-        allAuthors: [Author!]!
-    }
-    type User {
-        username: String!
-        favoriteGenre: String!
-    }
-    type Mutation {
-        addBook(
-            title: String!
-            author: String!
-            published: Int!
-            genres: [String!]!
-        ): Book
-        editAuthor(
-            name: String!
-            setBornTo: Int!
-        ): Author
-    }
+  type Query {
+    me: User
+    bookCount: Int!
+    authorCount: Int!
+    allBooks(author: String, genre: String): [Book!]!
+    allAuthors: [Author!]!
+  }
 
+  type User {
+    username: String!
+    favoriteGenre: String!
+    id: ID!
+  }
 
-    type Book {
-        title: String!
-        published: Int!
-        author: Author!  
-        genres: [String!]!
-    }
-    type Author {
-        name: String!
-        born: Int
-        bookCount: Int
-    }
+  type Token {
+    value: String!
+  }
+
+  type Mutation {
+    addBook(
+      title: String!
+      author: String!
+      published: Int!
+      genres: [String!]!
+    ): Book
+    editAuthor(
+      name: String!
+      setBornTo: Int!
+    ): Author
+
+    createUser(
+      username: String!
+      favoriteGenre: String!
+    ): User
+    login(
+      username: String!
+      password: String!
+    ): Token
+  }
+
+  type Book {
+    title: String!
+    published: Int!
+    author: Author!
+    genres: [String!]!
+  }
+
+  type Author {
+    name: String!
+    born: Int
+    bookCount: Int
+  }
 `
 
-const user = {
-    username: 'admin',
-    favoriteGenre: 'refactoring'
-}
+
+
 
 
 const resolvers = {
@@ -174,7 +190,7 @@ const resolvers = {
         },
 
         // Puedes dejar tu "me" tal cual con el usuario fake en context
-        me: (root, args, context) => context.currentUser
+        me: (root, args, { currentUser }) => currentUser
     },
 
     // Resolver de campo para calcular bookCount por autor
@@ -222,20 +238,48 @@ const resolvers = {
             } catch (error) {
                 throwBadInput('Updating author failed', { name }, error)
             }
+        },
+        createUser: async (root, args) => {
+            const user = new User({ username: args.username, favoriteGenre: args.favoriteGenre })
+            try {
+                return await user.save()
+            } catch (error) {
+                throw new GraphQLError('Creating the user failed', {
+                    extensions: { code: 'BAD_USER_INPUT', invalidArgs: { username: args.username }, error }
+                })
+            }
+        },
+
+        login: async (root, { username, password }) => {
+            const user = await User.findOne({ username })
+            // password fija del curso
+            if (!user || password !== 'secret') {
+                throw new GraphQLError('wrong credentials', {
+                    extensions: { code: 'BAD_USER_INPUT' }
+                })
+            }
+            const payload = { username: user.username, id: user._id }
+            const value = jwt.sign(payload, process.env.JWT_SECRET)
+            return { value }
         }
     }
 }
 
-const server = new ApolloServer({
-    typeDefs,
-    resolvers,
-})
-
-const User = { username: 'admin', favoriteGenre: 'refactoring' }
+const server = new ApolloServer({ typeDefs, resolvers })
 
 startStandaloneServer(server, {
     listen: { port: 4000 },
-    context: async () => ({ currentUser: User })
-}).then(({ url }) => {
-    console.log(`Server ready at ${url}`)
-})
+    context: async ({ req }) => {
+        const auth = req?.headers?.authorization
+        if (auth && auth.toLowerCase().startsWith('bearer ')) {
+            try {
+                const decoded = jwt.verify(auth.substring(7), process.env.JWT_SECRET)
+                const currentUser = await User.findById(decoded.id)
+                return { currentUser }
+            } catch {
+                return {}
+            }
+        }
+        return {}
+    }
+}).then(({ url }) => console.log(`Server ready at ${url}`))
