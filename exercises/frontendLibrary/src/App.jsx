@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { useApolloClient, useSubscription } from "@apollo/client";
+import { ALL_BOOKS, BOOK_ADDED } from "./queries";
 
 import Authors from "./components/Authors";
 import Books from "./components/Books";
 import NewBook from "./components/NewBook";
 import LoginForm from "./components/LoginForm";
 import Recommendations from "./components/Recommendations";
-import { BOOK_ADDED } from "./queries"; 
 
 const App = () => {
   const client = useApolloClient();
@@ -18,12 +18,51 @@ const App = () => {
     if (saved) setToken(saved);
   }, []);
 
+  // evita duplicados
+  const appendIfMissing = (list, book) =>
+    list.some((b) => b.id === book.id) ? list : list.concat(book);
+
+  // Actualiza la caché en todas las variantes de ALL_BOOKS
+  const updateCacheWith = (added) => {
+    // sin filtro (genre: null)
+    try {
+      client.cache.updateQuery(
+        { query: ALL_BOOKS, variables: { genre: null } },
+        (data) => {
+          if (!data?.allBooks) return { allBooks: [added] };
+          return { allBooks: appendIfMissing(data.allBooks, added) };
+        }
+      );
+    } catch {
+      // si esa variante no está en caché aún, ignorar
+    }
+
+    // listas por género
+    for (const g of added.genres ?? []) {
+      try {
+        client.cache.updateQuery(
+          { query: ALL_BOOKS, variables: { genre: g } },
+          (data) => {
+            if (!data?.allBooks) return { allBooks: [added] };
+            return { allBooks: appendIfMissing(data.allBooks, added) };
+          }
+        );
+      } catch {
+        // idem
+      }
+    }
+  };
+
+  // Suscripción a nuevos libros
   useSubscription(BOOK_ADDED, {
     onData: ({ data }) => {
       const added = data.data?.bookAdded;
       if (!added) return;
+      // notificación
       window.alert(`New book added: "${added.title}" by ${added.author?.name}`);
-    }
+      // actualización de caché
+      updateCacheWith(added);
+    },
   });
 
   const handleLogin = (jwt) => {
@@ -49,7 +88,9 @@ const App = () => {
         ) : (
           <>
             <button onClick={() => setPage("add")}>add book</button>
-            <button onClick={() => setPage("recommendations")}>recommendations</button>
+            <button onClick={() => setPage("recommendations")}>
+              recommendations
+            </button>
             <button onClick={logout}>logout</button>
           </>
         )}
@@ -59,10 +100,7 @@ const App = () => {
       <Books show={page === "books"} />
       {token && <NewBook show={page === "add"} />}
       {token && <Recommendations show={page === "recommendations"} />}
-
-      {!token && page === "login" && (
-        <LoginForm onLogin={handleLogin} />
-      )}
+      {!token && page === "login" && <LoginForm onLogin={handleLogin} />}
     </div>
   );
 };

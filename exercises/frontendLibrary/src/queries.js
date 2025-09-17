@@ -39,7 +39,7 @@ export const ALL_BOOKS = gql`
     }
   }
   ${BOOK_DETAILS}
-`
+`;
 
 export const CREATE_BOOK = gql`
   mutation addBook(
@@ -95,8 +95,13 @@ export const ME = gql`
 export const BOOK_ADDED = gql`
   subscription {
     bookAdded {
-      ...BookDetails
+      id
+      title
+      published
+      author {
+        name
+      }
+      genres
     }
   }
-  ${BOOK_DETAILS}
 `

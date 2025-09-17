@@ -36,34 +36,31 @@ const resolvers = {
     },
 
     Mutation: {
-        addBook: async (root, args) => {
-            // 1) autor: crear o recuperar
+        addBook: async (root, args, context) => {
+            const currentUser = context.currentUser
+            if (!currentUser) {
+                throw new AuthenticationError("not authenticated")
+            }
+
             let author = await Author.findOne({ name: args.author })
             if (!author) {
                 author = new Author({ name: args.author })
-                try {
-                    await author.save()
-                } catch (error) {
-                    // aquí saltan minlength/unique del autor
-                    throwBadInput('Creating author failed', { name: args.author }, error)
-                }
+                await author.save()
             }
 
-            // 2) libro
-            const book = new Book({
-                title: args.title,
-                published: args.published,
-                genres: args.genres,
-                author: author._id,
-            })
+            const book = new Book({ ...args, author: author._id })
 
             try {
-                const populated = await saved.populate('author')
-                pubsub.publish('BOOK_ADDED', { bookAdded: populated })
-                return populated
+                await book.save()
             } catch (error) {
-                throwBadInput('Creating book failed', { title: args.title }, error)
+                throw new UserInputError(error.message, { invalidArgs: args })
             }
+
+            // popular el autor para que GraphQL devuelva datos completos
+            const populatedBook = await book.populate('author')
+
+            pubsub.publish('BOOK_ADDED', { bookAdded: populatedBook })
+            return populatedBook
         },
 
         editAuthor: async (root, { name, setBornTo }) => {
