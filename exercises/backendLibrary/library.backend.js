@@ -123,6 +123,8 @@ const typeDefs = `
     allAuthors: [Author!]!
   }
 
+  
+
   type User {
     username: String!
     favoriteGenre: String!
