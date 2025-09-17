@@ -23,16 +23,28 @@ const resolvers = {
 
         // Devolver todos los autores; bookCount se calcula abajo en el field resolver
         allAuthors: async () => {
-            return Author.find({})
+            // Obtenemos todos los autores
+            const authors = await Author.find({})
+
+            // Contamos libros agrupados por autor
+            const booksCount = await Book.aggregate([
+                { $group: { _id: "$author", count: { $sum: 1 } } }
+            ])
+
+            // Creamos un map autorId -> count
+            const countMap = {}
+            booksCount.forEach(b => {
+                countMap[b._id.toString()] = b.count
+            })
+
+            // devolvemos autores + campo virtual bookCount
+            return authors.map(a => ({
+                id: a.id,
+                name: a.name,
+                born: a.born,
+                bookCount: countMap[a._id.toString()] || 0
+            }))
         },
-
-        // Puedes dejar tu "me" tal cual con el usuario fake en context
-        me: (root, args, { currentUser }) => currentUser
-    },
-
-    // Resolver de campo para calcular bookCount por autor
-    Author: {
-        bookCount: async (root) => Book.countDocuments({ author: root._id })
     },
 
     Mutation: {
